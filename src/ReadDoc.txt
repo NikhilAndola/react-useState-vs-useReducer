@@ -1,0 +1,264 @@
+useReducer third parameter: lazy initialization
+It's good to know that useReducer has an optional third argument. This argument is a function used to initialize the state lazily if you need to.
+
+This is not used very often but it can be quite useful when you actually need it. The react documentation has a good example of how to use that lazy initializaiton.
+
+useState vs useReducer: when to use which
+Now that you know how useReducer works and how to use it in your components, we need to address an important question. Since useState and useReducer are two ways of managing state, which should you choose when?
+
+These kinds of questions are always a tricky topic because the answer will usually change depending on who you ask, and it's also highly context-dependent. However, there are still guidelines that can orient you in your choice.
+
+First off, know that useState should remain your default choice for managing React state. Only switch to useReducer if you start having trouble with useState (and if that trouble can be solved by switching to useReducer). At least until you're experienced enough with useReducer to know in advance which one to use.
+
+I'll illustrate when to use useReducer over useState through a few examples.
+
+Multiple pieces of state that rely on each other
+One good use case for useReducer is when you have multiple pieces of state that rely on each other.
+
+It's quite common when you're building forms. Let's say you have a text input and you want to track three things:
+
+The value of the input.
+Whether the input has already been "touched" by the user. This is useful to know whether to display an error. For example, if the field is required you want to display an error when it's empty. However, you don't want to display an error on the first render when the user has never visited the input before.
+Whether there's an error.
+With useState, you would have to use the hook three times and update three pieces of state separately each time there's a change.
+
+With useReducer, the logic is actually quite simple:
+
+import { useReducer } from 'react';
+
+const initialValue = {
+  value: '',
+  touched: false,
+  error: null,
+};
+
+const reducer = (state, { type, payload }) => {
+  switch (type) {
+    case 'update':
+      return {
+        value: payload.value,
+        touched: true,
+        error: payload.error,
+      };
+    case 'reset':
+      return initialValue;
+    default:
+      throw new Error(`Unknown action type: ${type}`);
+  }
+};
+
+const Form = () => {
+  const [state, dispatch] = useReducer(reducer, initialValue);
+  console.log(state);
+  return (
+    <div>
+      <input
+        className={state.error ? 'error' : ''}
+        value={state.value}
+        onChange={(event) =>
+          dispatch({
+            type: 'update',
+            payload: {
+              value: event.target.value,
+              error: state.touched ? event.target.value.length === 0 : null,
+            },
+          })
+        }
+      />
+      <button onClick={() => dispatch({ type: 'reset' })}>reset</button>
+    </div>
+  );
+};
+
+export default Form;
+Add a bit of rudimentary CSS to style the error class, and you have the beginning of an input with good UX and simple logic, thanks to useReducer:
+
+.error {
+  border-color: red;
+}
+
+.error:focus {
+  outline-color: red;
+}
+
+simple form demo
+Manage complex state
+Another good use case for useReducer is when you have a LOT of different pieces of state, and putting them all in useState would get really out of hand.
+
+We saw earlier an example of a single reducer managing 2 inputs with the same action. We can easily scale that example up to 4 inputs.
+
+While we're doing this, we might as well refactor the action out of each individual input:
+
+import { useReducer } from 'react';
+
+const initialValue = {
+  firstName: '',
+  lastName: '',
+  username: '',
+  email: '',
+};
+
+const reducer = (state, action) => {
+  switch (action.type) {
+    case 'update':
+      return {
+        ...state,
+        [action.payload.key]: action.payload.value,
+      };
+    default:
+      throw new Error(`Unknown action type: ${action.type}`);
+  }
+};
+
+const Form = () => {
+  const [state, dispatch] = useReducer(reducer, initialValue);
+
+  const inputAction = (event) => {
+    dispatch({
+      type: 'update',
+      payload: { key: event.target.name, value: event.target.value },
+    });
+  };
+
+  return (
+    <div>
+      <input
+        value={state.firstName}
+        type="text"
+        name="firstName"
+        onChange={inputAction}
+      />
+      <input
+        value={state.lastName}
+        type="text"
+        name="lastName"
+        onChange={inputAction}
+      />
+      <input
+        value={state.username}
+        type="text"
+        onChange={inputAction}
+        name="username"
+      />
+      <input
+        value={state.email}
+        type="email"
+        name="email"
+        onChange={inputAction}
+      />
+    </div>
+  );
+};
+
+export default Form;
+Seriously, how clean and clear is that code? Imagine doing this with 4 useState instead! All right, it wouldn't be that bad, but this can scale to the number of inputs you want without adding anything else than the input itself.
+
+And you could also easily build further on that. For example, we may want to add the touched and error property of the last section to each of the four inputs in this section.
+
+In fact, I advise you to try it yourself, it's a good exercise to cement your learnings so far!
+
+What about doing this but with useState instead?
+One way to get rid of a dozen of useState statements is to just put all of your state into one object stored in a single useState, and then update that.
+
+This solution works, and sometimes it's a good way to go. But you'll often find yourself re-implementing a useReducer in a more awkward way. Might as well use a reducer right away.
+
+useReducer with TypeScript
+All right, you should be getting the hang of useReducer now. If you're a TypeScript user, you're probably wondering how to properly make the two play nice.
+
+Thankfully it's pretty easy. Here it is:
+
+import { useReducer, ChangeEvent } from 'react';
+
+type State = {
+  firstName: string;
+  lastName: string;
+  username: string;
+  email: string;
+};
+
+type Action =
+  | {
+      type: 'update';
+      payload: {
+        key: string;
+        value: string;
+      };
+    }
+  | { type: 'reset' };
+
+const initialValue = {
+  firstName: '',
+  lastName: '',
+  username: '',
+  email: '',
+};
+
+const reducer = (state: State, action: Action) => {
+  switch (action.type) {
+    case 'update':
+      return { ...state, [action.payload.key]: action.payload.value };
+    case 'reset':
+      return initialValue;
+    default:
+      throw new Error(`Unknown action type: ${action.type}`);
+  }
+};
+
+const Form = () => {
+  const [state, dispatch] = useReducer(reducer, initialValue);
+
+  const inputAction = (event: ChangeEvent<HTMLInputElement>) => {
+    dispatch({
+      type: 'update',
+      payload: { key: event.target.name, value: event.target.value },
+    });
+  };
+
+  return (
+    <div>
+      <input
+        value={state.firstName}
+        type="text"
+        name="firstName"
+        onChange={inputAction}
+      />
+      <input
+        value={state.lastName}
+        type="text"
+        name="lastName"
+        onChange={inputAction}
+      />
+      <input
+        value={state.username}
+        type="text"
+        onChange={inputAction}
+        name="username"
+      />
+      <input
+        value={state.email}
+        type="email"
+        name="email"
+        onChange={inputAction}
+      />
+    </div>
+  );
+};
+
+export default Form;
+If you're unfamiliar with the syntax of the Action type, it's a discriminated union.
+
+Redux: an overpowered useReducer
+We're closing on the end of our useReducer guide (phew, it turned out way longer than I anticipated!). There's still one important thing to mention: Redux.
+
+You might have heard of Redux as this very popular state management library. Some people hate it, some people love it. But it turns out that all your brain juice that went into understanding useReducer is useful to understand Redux.
+
+In fact, you can think of Redux as just a big, global, managed and optimized useReducer for your entire app. It's really all it is.
+
+You have a "store", which is your state, and you define "actions" that tell a "reducer" how to modify that store. Sounds familiar!
+
+Of course there are some important differences, but if you've understood useReducer well you're in very good shape to understand Redux easily.
+
+Wrap up
+And that's the end of the article! I hope that it helped you learn everything you wanted about useReducer.
+
+As you saw, it can be a very powerful tool in your React toolkit.
